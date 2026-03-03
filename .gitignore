@@ -10,7 +10,7 @@ build/
 venv/
 env/
 *.db
-exports/
-reports/
+/exports/
+/reports/
 .env
 *.log
