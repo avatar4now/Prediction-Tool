@@ -1,6 +1,6 @@
 """CLI interface for the prediction market trading bot.
 
-Commands: scan, trade, portfolio, history, report, backtest
+Commands: scan, trade, unusual, portfolio, history, report, backtest
 """
 
 from __future__ import annotations
@@ -150,6 +150,133 @@ def scan(ctx, provider, limit):
         print_markets(markets[:limit])
     else:
         click.echo("No markets found. Check your config and network connection.")
+
+
+# ── unusual ─────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--provider", "-p", default=None, help="Filter by provider (kalshi/polymarket)")
+@click.option("--limit", "-n", default=50, help="Max markets to scan")
+@click.option("--min-score", default=10.0, help="Minimum U-Score to display (0-100)")
+@click.option("--sort", "-s", default="score", type=click.Choice(["score", "volume", "change"]),
+              help="Sort results by: score, volume, or change")
+@click.pass_context
+def unusual(ctx, provider, limit, min_score, sort):
+    """Scan for unusual market activity (volume spikes, momentum, whale trades).
+
+    Your own U-Score scanner — like Unusual Whales but for prediction markets.
+    """
+    from prediction_bot.strategies.unusual import UnusualActivityScanner
+    from prediction_bot.reports.terminal import print_unusual_markets
+
+    cfg = ctx.obj["cfg"]
+    providers = _get_providers(cfg)
+
+    if provider:
+        providers = [p for p in providers if p.name == provider]
+        if not providers:
+            click.echo(f"No provider named '{provider}'")
+            return
+
+    # Load scanner config
+    unusual_cfg = get_nested(cfg, "strategies", "unusual", default={})
+    scanner = UnusualActivityScanner(
+        volume_spike_threshold=unusual_cfg.get("volume_spike_threshold", 2.0),
+        momentum_threshold=unusual_cfg.get("momentum_threshold", 0.05),
+        whale_size_multiplier=unusual_cfg.get("whale_size_multiplier", 5.0),
+        book_imbalance_threshold=unusual_cfg.get("book_imbalance_threshold", 0.3),
+        lookback_bars=unusual_cfg.get("lookback_bars", 20),
+    )
+
+    async def _scan_unusual():
+        import asyncio
+
+        all_markets = []
+        for p in providers:
+            try:
+                markets = await p.get_markets(limit=limit)
+                all_markets.extend(markets)
+            except Exception as e:
+                click.echo(f"Error fetching from {p.name}: {e}")
+
+        if not all_markets:
+            click.echo("No markets found.")
+            return []
+
+        click.echo(f"Scanning {len(all_markets)} markets for unusual activity...")
+
+        results = []
+        # Process markets in batches of 5 to respect rate limits
+        for i in range(0, len(all_markets), 5):
+            batch = all_markets[i:i + 5]
+            tasks = []
+            for m in batch:
+                tasks.append(_analyze_market(scanner, m, providers))
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            for r in batch_results:
+                if isinstance(r, Exception):
+                    logger.debug(f"Analysis error: {r}")
+                elif r is not None:
+                    results.append(r)
+
+        # Close providers
+        for p in providers:
+            await p.close()
+
+        return results
+
+    async def _analyze_market(scanner, market, providers):
+        """Fetch detail data and score a single market."""
+        # Find the matching provider
+        prov = None
+        for p in providers:
+            if p.name == market.provider.value:
+                prov = p
+                break
+        if prov is None:
+            return None
+
+        # Fetch history, trades, and orderbook
+        history = []
+        trades = []
+        orderbook = None
+
+        try:
+            history = await prov.get_historical_prices(
+                market.market_id, interval="1h"
+            )
+        except Exception as e:
+            logger.debug(f"No history for {market.market_id}: {e}")
+
+        try:
+            trades = await prov.get_recent_trades(market.market_id, limit=100)
+        except Exception as e:
+            logger.debug(f"No trades for {market.market_id}: {e}")
+
+        try:
+            orderbook = await prov.get_orderbook(market.market_id)
+        except Exception as e:
+            logger.debug(f"No orderbook for {market.market_id}: {e}")
+
+        return scanner.score_market(market, history, trades, orderbook)
+
+    results = asyncio.run(_scan_unusual())
+
+    # Filter by min score
+    results = [r for r in results if r.u_score >= min_score]
+
+    # Sort
+    if sort == "volume":
+        results.sort(key=lambda r: r.volume_ratio, reverse=True)
+    elif sort == "change":
+        results.sort(key=lambda r: abs(r.price_change_pct), reverse=True)
+    else:
+        results.sort(key=lambda r: r.u_score, reverse=True)
+
+    if results:
+        print_unusual_markets(results)
+    else:
+        click.echo("No unusual activity detected. Try lowering --min-score or scanning more markets with --limit.")
 
 
 # ── trade ───────────────────────────────────────────────────────────

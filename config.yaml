@@ -44,6 +44,13 @@ strategies:
     sentiment_threshold: 0.6    # Minimum sentiment score to trigger trade
     stale_hours: 4              # Ignore news older than 4 hours
 
+  unusual:
+    volume_spike_threshold: 2.0   # Flag when volume is 2x+ the average
+    momentum_threshold: 0.05      # Flag when price moves 5%+ recently
+    whale_size_multiplier: 5.0    # Trades 5x+ avg size = whale
+    book_imbalance_threshold: 0.3 # Flag when bid/ask imbalance > 30%
+    lookback_bars: 20             # Historical bars for baseline
+
   arbitrage:
     min_spread_pct: 0.02        # Minimum 2% spread to trigger
     match_confidence: 0.8       # Minimum confidence for market matching

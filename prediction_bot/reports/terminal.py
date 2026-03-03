@@ -116,6 +116,110 @@ def print_trade_history(orders: list[Order]) -> None:
     console.print(f"\n[dim]{len(orders)} orders[/dim]")
 
 
+def print_unusual_markets(unusual: list) -> None:
+    """Print unusual activity scanner results."""
+    from prediction_bot.strategies.unusual import (
+        INDICATOR_BOOK,
+        INDICATOR_MOMENTUM,
+        INDICATOR_SMART,
+        INDICATOR_VOLUME,
+        UnusualMarket,
+    )
+
+    # Indicator color mapping
+    tag_styles = {
+        INDICATOR_VOLUME: "bold yellow",
+        INDICATOR_MOMENTUM: "bold green",
+        INDICATOR_SMART: "bold blue",
+        INDICATOR_BOOK: "bold magenta",
+    }
+    tag_labels = {
+        INDICATOR_VOLUME: "Vol Spike",
+        INDICATOR_MOMENTUM: "Momentum",
+        INDICATOR_SMART: "Smart $",
+        INDICATOR_BOOK: "Book Imbal",
+    }
+
+    table = Table(title="Unusual Activity Scanner", show_lines=True)
+    table.add_column("U-Score", justify="center", style="bold")
+    table.add_column("Market", max_width=42)
+    table.add_column("Provider", style="blue")
+    table.add_column("Price", justify="right")
+    table.add_column("Volume", justify="right")
+    table.add_column("Vol x Avg", justify="right")
+    table.add_column("Change %", justify="right")
+    table.add_column("Direction", justify="center")
+    table.add_column("Whales", justify="right")
+    table.add_column("Signals")
+
+    for u in unusual:
+        # U-Score color
+        if u.u_score >= 70:
+            score_str = f"[bold red]{u.u_score:.0f}[/bold red]"
+        elif u.u_score >= 40:
+            score_str = f"[bold yellow]{u.u_score:.0f}[/bold yellow]"
+        else:
+            score_str = f"[white]{u.u_score:.0f}[/white]"
+
+        # Price change color
+        if u.price_change_pct > 0:
+            change_str = f"[green]+{u.price_change_pct:.1f}%[/green]"
+        elif u.price_change_pct < 0:
+            change_str = f"[red]{u.price_change_pct:.1f}%[/red]"
+        else:
+            change_str = "0.0%"
+
+        # Direction color
+        dir_styles = {"BULLISH": "bold green", "BEARISH": "bold red", "NEUTRAL": "dim"}
+        dir_style = dir_styles.get(u.direction, "dim")
+        dir_str = f"[{dir_style}]{u.direction}[/{dir_style}]"
+
+        # Volume ratio
+        if u.volume_ratio == float("inf"):
+            vol_ratio_str = "[yellow]NEW[/yellow]"
+        elif u.volume_ratio >= 3:
+            vol_ratio_str = f"[bold yellow]{u.volume_ratio:.1f}x[/bold yellow]"
+        elif u.volume_ratio >= 2:
+            vol_ratio_str = f"[yellow]{u.volume_ratio:.1f}x[/yellow]"
+        else:
+            vol_ratio_str = f"{u.volume_ratio:.1f}x"
+
+        # Whale count
+        whale_str = f"[bold blue]{u.whale_trades}[/bold blue]" if u.whale_trades > 0 else "—"
+
+        # Signal tags
+        tags = " ".join(
+            f"[{tag_styles.get(ind, 'white')}]{tag_labels.get(ind, ind)}[/{tag_styles.get(ind, 'white')}]"
+            for ind in u.indicators
+        )
+
+        table.add_row(
+            score_str,
+            u.market.title[:42],
+            u.market.provider.value,
+            f"${u.market.yes_price:.2f}",
+            f"{u.market.volume:,.0f}",
+            vol_ratio_str,
+            change_str,
+            dir_str,
+            whale_str,
+            tags,
+        )
+
+    console.print(table)
+
+    # Legend
+    console.print(
+        "\n[dim]Signals: "
+        "[bold yellow]Vol Spike[/bold yellow] = volume surge  "
+        "[bold green]Momentum[/bold green] = price moving fast  "
+        "[bold blue]Smart $[/bold blue] = whale trades  "
+        "[bold magenta]Book Imbal[/bold magenta] = order book skew"
+        "[/dim]"
+    )
+    console.print(f"[dim]{len(unusual)} unusual markets found[/dim]")
+
+
 def print_cycle_actions(actions: list[dict]) -> None:
     """Print summary of actions from a trading cycle."""
     if not actions:
