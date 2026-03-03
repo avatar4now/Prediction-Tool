@@ -1,0 +1,65 @@
+# Prediction Market Trading Bot Configuration
+
+portfolio:
+  starting_capital: 10000.0
+  currency: "USD"
+
+risk:
+  max_position_pct: 0.05        # Max 5% of portfolio per market
+  max_exposure_pct: 0.50        # Max 50% of capital deployed at once
+  stop_loss_pct: 0.20           # 20% loss triggers stop-loss
+  expiry_close_hours: 24        # Auto-close positions 24h before expiry
+
+providers:
+  kalshi:
+    base_url: "https://api.elections.kalshi.com/trade-api/v2"
+    # Paper trading only — API key optional for public data
+    api_key: ""
+    rate_limit_per_sec: 10
+  polymarket:
+    base_url: "https://clob.polymarket.com"
+    gamma_url: "https://gamma-api.polymarket.com"
+    rate_limit_per_sec: 10
+
+strategies:
+  active: "momentum"            # Which strategy to run: momentum | mean_reversion | news | arbitrage
+
+  momentum:
+    lookback_periods: 10        # Number of periods to compute momentum
+    volume_threshold: 1.5       # Volume must be 1.5x average to trigger
+    price_change_threshold: 0.03  # 3% price change to trigger entry
+    exit_reversal_pct: 0.02     # 2% reversal from peak triggers exit
+    hold_periods_max: 50        # Max periods to hold a position
+
+  mean_reversion:
+    lookback_periods: 20
+    std_dev_entry: 2.0          # Enter when price is 2 std devs from mean
+    std_dev_exit: 0.5           # Exit when price reverts within 0.5 std devs
+    min_volume_ratio: 0.3       # Low volume confirms panic selling
+    max_hold_periods: 30
+
+  news:
+    news_api_key: ""            # NewsAPI.org key
+    keywords: []                # Additional keywords to track
+    sentiment_threshold: 0.6    # Minimum sentiment score to trigger trade
+    stale_hours: 4              # Ignore news older than 4 hours
+
+  arbitrage:
+    min_spread_pct: 0.02        # Minimum 2% spread to trigger
+    match_confidence: 0.8       # Minimum confidence for market matching
+    max_execution_lag_sec: 30   # Max seconds between legs
+
+trading:
+  scan_interval_sec: 60         # How often to scan for signals
+  max_orders_per_scan: 5        # Max orders per scan cycle
+  default_quantity: 10          # Default contract quantity per trade
+  simulated_fill_slippage: 0.01 # 1 cent slippage on simulated fills
+
+reporting:
+  daily_summary: true
+  weekly_pdf: true
+  csv_export_path: "exports/"
+  pdf_export_path: "reports/"
+
+database:
+  path: "predbot.db"

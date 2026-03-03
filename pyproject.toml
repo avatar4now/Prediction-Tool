@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prediction-bot"
+version = "0.1.0"
+description = "Prediction market paper trading bot for Kalshi and Polymarket"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    "httpx>=0.25",
+    "pandas>=2.1",
+    "matplotlib>=3.8",
+    "fpdf2>=2.7",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+
+[project.scripts]
+predbot = "prediction_bot.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["prediction_bot*"]
